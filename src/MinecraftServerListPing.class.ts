@@ -1,44 +1,110 @@
-const net = require("net");
-const iconv = require("iconv-lite");
-const varint = require("varint");
+import net from "net";
+import iconv from "iconv-lite";
+import varint from "varint";
+
+export type SampledPlayerType = {
+	/** The player's name */
+	name: string,
+	/** The unique ID of the player */
+	id: string
+}
+export type Ping17ReturnType = {
+	version: {
+		/** The version string, e.g. 1.8.7 */
+		name: string,
+		/** The protocol version, e.g. 47 */
+		protocol: number
+	},
+	players: {
+		/** The maximum amount of players */
+		max: number,
+		/** The number of players online */
+		online: number,
+		/** Sample of online players. The sample field may be missing if the server has no online players */
+		sample?: SampledPlayerType[]
+	},
+	/** 
+	 * The description field
+	 */
+	description: {
+		text: string
+	},
+	/**
+	 * The favicon field is optional, and should be a PNG image that is Base64 encoded (without newlines: \n, new lines no longer work since 1.13) 
+	 * and prepended with data:image/png;base64,
+	 */
+	favicon?: string
+}
+
+export type Ping16ReturnType = {
+	"version": {
+		"name": string,
+		"protocol": number
+	},
+	"players": {
+		"max": number,
+		"online": number,
+	},
+	"description": string
+}
+export type Ping15ReturnType = {
+	"version": {
+		"name": string,
+		"protocol": number
+	},
+	"players": {
+		"max": number,
+		"online": number
+	},
+	"description": string
+}
+export type Ping13ReturnType = {
+	"players": {
+		"max": number,
+		"online": number,
+	},
+	"description": string
+}
+
+
 
 /*
  *	Server List Ping
  *	https://wiki.vg/Server_List_Ping
  *
  */
-class MinecraftServerListPing {
+export class MinecraftServerListPing {
 
 	/*
 	 *	Current
 	 *	https://wiki.vg/Server_List_Ping#Current
 	 *
 	 */
-	static ping(protocol = 4, host, port = 25565, timeout = 3000) {
-		return new Promise( (resolve, reject) => {
+	static ping(protocol = 4, host: string, port = 25565, timeout = 3000) {
+		return new Promise<Ping17ReturnType>((resolve, reject) => {
 			const client = net.createConnection(port, host);
 
 			client.setTimeout(timeout);
 
 			client.on("timeout", (/* error */) => {
-				client.destroy( );
+				client.destroy();
 
-				reject( new Error("The client timed out while connecting to " + host + ":" + port) );
+				reject(new Error("The client timed out while connecting to " + host + ":" + port));
 			});
 
 			client.on("error", (error) => {
 				reject(error);
 			});
 
-			client.on("connect", ( ) => {
+			client.on("connect", () => {
 				// Packet ID
 				const packetBuffer = Buffer.from([0x00]);
 
 				// Protocol Version
-				const protocolBuffer = Buffer.from( varint.encode(protocol) );
+				const protocolBuffer = Buffer.from(varint.encode(protocol));
 
 				// Server Address
-				const hostLengthBuffer = Buffer.from( varint.encode(host.length) );
+				const hostLengthBuffer = Buffer.from(varint.encode(host.length));
 				const hostBuffer = Buffer.from(host);
 
 				// Server Port
@@ -50,7 +116,7 @@ class MinecraftServerListPing {
 
 				// Handshake
 				const dataBuffer = Buffer.concat([packetBuffer, protocolBuffer, hostLengthBuffer, hostBuffer, portBuffer, stateBuffer]);
-				const dataLengthBuffer = Buffer.from( varint.encode(dataBuffer.length) );
+				const dataLengthBuffer = Buffer.from(varint.encode(dataBuffer.length));
 
 				const handshakeBuffer = Buffer.concat([dataLengthBuffer, dataBuffer]);
 				client.write(handshakeBuffer);
@@ -71,12 +137,12 @@ class MinecraftServerListPing {
 				// Error: Invalid
 				try {
 					responseDataBufferLength = varint.decode(responseDataBuffer);
-				} catch(error) {
+				} catch (error) {
 					return;
 				}
 
 				// Error: Too short
-				if(responseDataBuffer.length < responseDataBufferLength - varint.decode.bytes) return;
+				if (responseDataBuffer.length < responseDataBufferLength - varint.decode.bytes) return;
 
 				let offset = varint.decode.bytes;
 
@@ -89,14 +155,14 @@ class MinecraftServerListPing {
 				offset += varint.decode.bytes;
 
 				try {
-					const response = JSON.parse( responseDataBuffer.toString("utf-8", offset) );
+					const response = JSON.parse(responseDataBuffer.toString("utf-8", offset));
 
 					resolve(response);
-				} catch(error) {
+				} catch (error) {
 					reject(error);
 				}
 
-				client.end( );
+				client.end();
 			});
 		});
 	}
@@ -106,23 +172,23 @@ class MinecraftServerListPing {
 	 *	https://wiki.vg/Server_List_Ping#1.6
 	 *
 	 */
-	static ping16(protocol = 73, host, port = 25565, timeout = 3000) {
-		return new Promise( (resolve, reject) => {
+	static ping16(protocol = 73, host: string, port = 25565, timeout = 3000) {
+		return new Promise<Ping16ReturnType>((resolve, reject) => {
 			const client = net.createConnection(port, host);
 
 			client.setTimeout(timeout);
 
 			client.on("timeout", (/* error */) => {
-				client.destroy( );
+				client.destroy();
 
-				reject( new Error("The client timed out while connecting to " + host + ":" + port + ".") );
+				reject(new Error("The client timed out while connecting to " + host + ":" + port + "."));
 			});
 
 			client.on("error", (error) => {
 				reject(error);
 			});
 
-			client.on("connect", ( ) => {
+			client.on("connect", () => {
 				// FE — packet identifier for a server list ping
 				// 01 — server list ping's payload (always 1)
 				// FA — packet identifier for a plugin message
@@ -157,7 +223,7 @@ class MinecraftServerListPing {
 			// Response
 			client.on("data", (responseBuffer) => {
 				const dataBuffer = iconv.decode(responseBuffer.slice(9, responseBuffer.length), "utf-16be");
-				const data = dataBuffer.toString( ).split("\0");
+				const data = dataBuffer.toString().split("\0");
 
 				resolve({
 					"version": {
@@ -179,23 +245,23 @@ class MinecraftServerListPing {
 	 *	https://wiki.vg/Server_List_Ping#1.4_to_1.5
 	 *
 	 */
-	static ping15(host, port = 25565, timeout = 3000) {
-		return new Promise( (resolve, reject) => {
+	static ping15(host: string, port = 25565, timeout = 3000) {
+		return new Promise<Ping15ReturnType>((resolve, reject) => {
 			const client = net.createConnection(port, host);
 
 			client.setTimeout(timeout);
 
 			client.on("timeout", (/* error */) => {
-				client.destroy( );
+				client.destroy();
 
-				reject( new Error("The client timed out while connecting to " + host + ":" + port) );
+				reject(new Error("The client timed out while connecting to " + host + ":" + port));
 			});
 
 			client.on("error", (error) => {
 				reject(error);
 			});
 
-			client.on("connect", ( ) => {
+			client.on("connect", () => {
 				// Request
 				const requestBuffer = Buffer.from([0xFE, 0x01]);
 				client.write(requestBuffer);
@@ -204,7 +270,7 @@ class MinecraftServerListPing {
 			// Response
 			client.on("data", (responseBuffer) => {
 				const dataBuffer = iconv.decode(responseBuffer.slice(9, responseBuffer.length), "utf-16be");
-				const data = dataBuffer.toString( ).split("\0");
+				const data = dataBuffer.toString().split("\0");
 
 				resolve({
 					"version": {
@@ -226,23 +292,23 @@ class MinecraftServerListPing {
 	 *	https://wiki.vg/Server_List_Ping#Beta_1.8_to_1.3
 	 *
 	 */
-	static ping13(host, port = 25565, timeout = 3000) {
-		return new Promise( (resolve, reject) => {
+	static ping13(host: string, port = 25565, timeout = 3000) {
+		return new Promise<Ping13ReturnType>((resolve, reject) => {
 			const client = net.createConnection(port, host);
 
 			client.setTimeout(timeout);
 
 			client.on("timeout", (/* error */) => {
-				client.destroy( );
+				client.destroy();
 
-				reject( new Error("The client timed out while connecting to " + host + ":" + port) );
+				reject(new Error("The client timed out while connecting to " + host + ":" + port));
 			});
 
 			client.on("error", (error) => {
 				reject(error);
 			});
 
-			client.on("connect", ( ) => {
+			client.on("connect", () => {
 				// Request
 				const requestBuffer = Buffer.from([0xFE]);
 				client.write(requestBuffer);
@@ -251,7 +317,7 @@ class MinecraftServerListPing {
 			// Response
 			client.on("data", (responseBuffer) => {
 				const dataBuffer = iconv.decode(responseBuffer.slice(3, responseBuffer.length), "utf-16be");
-				const data = dataBuffer.toString( ).split("\u00A7");
+				const data = dataBuffer.toString().split("\u00A7");
 
 				resolve({
 					"players": {
@@ -263,7 +329,4 @@ class MinecraftServerListPing {
 			});
 		});
 	}
-
 }
-
-module.exports = MinecraftServerListPing;

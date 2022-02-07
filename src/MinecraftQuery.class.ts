@@ -1,38 +1,71 @@
-const dgram = require("dgram");
+import dgram from "dgram";
+
+type UnusedCallbackType = (error?: any | null, data?: any | null) => void;
+
+export type ServerModificationType = {
+	name: string,
+	plugins: string[] | null
+}
+
+export type FullQueryReturnType = {
+	"version": {
+		"name": string
+	},
+	"players": {
+		"online": number,
+		"max": number,
+		"sample": string[]
+	},
+	"description": string,
+	"map": string,
+	"game_type": string,
+	"game_id": string,
+	"server_modification": ServerModificationType | null
+}
+
+export type QueryReturnType = {
+	"players": {
+		"online": number,
+		"max": number
+	},
+	"description": string,
+	"map": string,
+	"game_type": string
+}
 
 /*
  *	Query
  *	https://wiki.vg/Query
  *
  */
-class MinecraftQuery {
+export class MinecraftQuery {
 
 	/*
 	 *	Basic stat
 	 *	https://wiki.vg/Query#Basic_stat
 	 *
 	 */
-	static query(host, port = 25565, callback, timeout = 3000) {
-		return new Promise( (resolve, reject) => {
+	static query(host: string, port: number = 25565, callback?: UnusedCallbackType | undefined, timeout = 3000) {
+		return new Promise<QueryReturnType>((resolve, reject) => {
 			const session = 0x00000001;
 
 			const client = dgram.createSocket("udp4");
 
 			client.connect(port, host);
 
-			let timeoutFunction = setTimeout( ( ) => {
-				client.close( );
+			let timeoutFunction = setTimeout(() => {
+				client.close();
 
-				reject( new Error("The client timed out while connecting to " + host + ":" + port) );
+				reject(new Error("The client timed out while connecting to " + host + ":" + port));
 			}, timeout, client);
 
 			client.on("error", (error) => {
-				client.close( );
+				client.close();
 
 				reject(error);
 			});
 
-			client.on("connect", ( ) => {
+			client.on("connect", () => {
 				// Handshake
 				const handshakeBuffer = Buffer.alloc(7);
 				// Magic
@@ -48,13 +81,13 @@ class MinecraftQuery {
 			let authenticated = false;
 
 			client.on("message", (responseBuffer) => {
-				if(authenticated) {
-					client.close( );
+				if (authenticated) {
+					client.close();
 
 					clearTimeout(timeoutFunction);
 
 					// Response
-					const responseData = responseBuffer.toString( ).split("\0");
+					const responseData = responseBuffer.toString().split("\0");
 
 					return resolve({
 						"players": {
@@ -69,7 +102,7 @@ class MinecraftQuery {
 
 				authenticated = true;
 
-				const token = parseInt( responseBuffer.toString("utf-8", 5) );
+				const token = parseInt(responseBuffer.toString("utf-8", 5));
 
 				// Request
 				const requestBuffer = Buffer.alloc(11);
@@ -92,27 +125,27 @@ class MinecraftQuery {
 	 *	https://wiki.vg/Query#Full_stat
 	 *
 	 */
-	static fullQuery(host, port = 25565, callback, timeout = 3000) {
-		return new Promise( (resolve, reject) => {
+	static fullQuery(host: string, port = 25565, callback?: UnusedCallbackType | undefined, timeout = 3000) {
+		return new Promise<FullQueryReturnType>((resolve, reject) => {
 			const session = 0x00000001;
 
 			const client = dgram.createSocket("udp4");
 
 			client.connect(port, host);
 
-			let timeoutFunction = setTimeout( ( ) => {
-				client.close( );
+			let timeoutFunction = setTimeout(() => {
+				client.close();
 
-				reject( new Error("The client timed out while connecting to " + host + ":" + port) );
+				reject(new Error("The client timed out while connecting to " + host + ":" + port));
 			}, timeout, client);
 
 			client.on("error", (error) => {
-				client.close( );
+				client.close();
 
 				reject(error);
 			});
 
-			client.on("connect", ( ) => {
+			client.on("connect", () => {
 				// Handshake
 				const handshakeBuffer = Buffer.alloc(7);
 				// Magic
@@ -128,8 +161,8 @@ class MinecraftQuery {
 			let authenticated = false;
 
 			client.on("message", (responseBuffer) => {
-				if(authenticated) {
-					client.close( );
+				if (authenticated) {
+					client.close();
 
 					clearTimeout(timeoutFunction);
 
@@ -143,9 +176,9 @@ class MinecraftQuery {
 					players.splice(players.length - 2);
 
 					// List of plugins, not used by the vanilla server, where it is an empty string
-					let serverModification = null;
+					let serverModification: ServerModificationType | null = null;
 
-					if(data[9].length > 0) {
+					if (data[9].length > 0) {
 						const plugins = data[9].split(": ");
 
 						serverModification = {
@@ -173,7 +206,7 @@ class MinecraftQuery {
 
 				authenticated = true;
 
-				const token = parseInt( responseBuffer.toString("utf-8", 5) );
+				const token = parseInt(responseBuffer.toString("utf-8", 5));
 
 				// Request
 				const requestBuffer = Buffer.alloc(15);
@@ -194,5 +227,3 @@ class MinecraftQuery {
 	}
 
 }
-
-module.exports = MinecraftQuery;
